@@ -1,0 +1,77 @@
+#include <stdio.h>
+#include <system.h>
+#include <alt_types.h>
+#include <io.h>
+ 
+// Define the base addresses for switches and seven-segment display
+#include <stdio.h>
+#include <system.h>
+#include <alt_types.h>
+#include <io.h>
+ 
+// Define the base addresses for switches and seven-segment display
+#define SWITCH_BASE 0x00021010  // Replace with the actual base address of the switches
+#define SEVEN_SEG_BASE 0x00021000  // Replace with the actual base address of the seven-segment display
+// Seven-segment encoding for hexadecimal digits 0-F
+alt_u8 seven_seg_encoding[16] = {
+    ~0x3F, // 0: a, b, c, d, e, f
+    ~0x06, // 1: b, c
+    ~0x5B, // 2: a, b, d, e, g
+    ~0x4F, // 3: a, b, c, d, g
+    ~0x66, // 4: b, c, f, g
+    ~0x6D, // 5: a, c, d, f, g
+    ~0x7D, // 6: a, c, d, e, f, g
+    ~0x07, // 7: a, b, c
+    ~0x7F, // 8: a, b, c, d, e, f, g
+    ~0x6F, // 9: a, b, c, d, f, g
+    ~0x77, // A: a, b, c, e, f, g
+    ~0x7C, // B: c, d, e, f, g
+    ~0x39, // C: a, d, e, f
+ ~0x5E, // D: b, c, d, e, g
+    ~0x79, // E: a, d, e, f, g
+    ~0x71  // F: a, e, f, g
+};
+ 
+void delay_ms(unsigned int ms) {
+    volatile unsigned int i, j;
+    for (i = 0; i < ms; i++) {
+        for (j = 0; j < 5000; j++) {
+            // Simple delay loop
+        }
+    }
+}
+int main() {
+    alt_u32 switches;   // Variable to read the switch values
+    alt_u8 binary_value; // 4-bit binary value read from switches
+    alt_u8 hex_value;    // Hexadecimal value (same as binary in this case)
+    alt_u8 prev_binary_value = 0xFF; // To store the previous binary value for change detection
+ 
+    while (1) {
+        // Step 1: Read the switch values
+        switches = IORD(SWITCH_BASE, 0);
+ 
+        // Step 2: Extract the first four switches (bits 0 to 3)
+        binary_value = switches & 0x0F; // Mask the lower 4 bits
+ 
+        // Step 3: Convert binary to hexadecimal (same value, just interpreted as hex)
+        hex_value = binary_value;
+ 
+        // Step 4: Check if the binary value has changed
+if (binary_value != prev_binary_value) {
+            // Print input and output to the Nios II Command Window
+            printf("Switch Input (Binary): %d\n", binary_value);
+            printf("Hexadecimal Output: %X\n\n", hex_value);
+ 
+            // Update the previous binary value
+            prev_binary_value = binary_value;
+ 
+            // Step 5: Display the hexadecimal value on the seven-segment display
+            IOWR(SEVEN_SEG_BASE, 0, seven_seg_encoding[hex_value]);
+        }
+ 
+        // Step 6: Add a delay to stabilize the display
+        delay_ms(200); // 200 ms delay
+    }
+ 
+    return 0;
+}
