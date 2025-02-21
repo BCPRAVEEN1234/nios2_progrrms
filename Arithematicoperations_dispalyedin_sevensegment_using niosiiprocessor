@@ -1,0 +1,124 @@
+// c code for performing arithematic operations using switches and displayed output in sevensegement display
+#include <stdio.h>
+#include <system.h>
+#include <alt_types.h>
+#include <io.h>
+ 
+#define sw 0x00021030 // Base address of switches
+#define seg1 0x00021020 // Base address of the seven-segment display
+#define seg2 0x00021010 // Base address of the seven-segment display
+#define seg3 0x00021000 // Base address of the seven-segment display
+void delay_ms(unsigned int ms) {
+    volatile unsigned int i, j;
+    for (i = 0; i < ms; i++) {
+        for (j = 0; j < 5000; j++) {
+            // Simple delay loop
+        }
+    }
+}
+// Seven-segment encoding for digits 0-9
+alt_u8 seven_seg_encoding[10] = {
+		 ~0x3F, // 0: a, b, c, d, e, f
+		    ~0x06, // 1: b, c
+		    ~0x5B, // 2: a, b, d, e, g
+		    ~0x4F, // 3: a, b, c, d, g
+		    ~0x66, // 4: b, c, f, g
+		    ~0x6D, // 5: a, c, d, f, g
+		    ~0x7D, // 6: a, c, d, e, f, g
+		    ~0x07, // 7: a, b, c
+		    ~0x7F, // 8: a, b, c, d, e, f, g
+		    ~0x6F, // 9: a, b, c, d, f, g
+~0x77, // A: a, b, c, e, f, g
+		    ~0x7C, // B: c, d, e, f, g
+		    ~0x39, // C: a, d, e, f
+		    ~0x5E, // D: b, c, d, e, g
+		    ~0x79, // E: a, d, e, f, g
+		    ~0x71  // F: a, e, f, g
+};
+// Function to update the seven-segment display
+void update_seven_segment(alt_u16 value) {
+    alt_u32 display_value_1 = 0;
+	alt_u32 display_value_2 = 0;
+	alt_u32 display_value_3 = 0;
+// Extract each digit of the value and encode it for the seven-segment display
+    display_value_1 |= seven_seg_encoding[value % 10] ;  // Ones place
+    display_value_2 |= seven_seg_encoding[(value / 10) % 10] ;  // Tens place
+    display_value_3 |= seven_seg_encoding[(value / 100) % 10] ; // Hundreds place
+   
+ 
+    // Write the encoded value to the seven-segment display base address
+    IOWR(seg1, 0, display_value_1);
+    IOWR(seg2, 0, display_value_2);
+    IOWR(seg3, 0, display_value_3);
+int main() {
+    alt_u32 switches;         // Variable to read the switch values
+    alt_u8 operation;         // Current operation code (bits 0 and 1)
+    alt_u8 operand1;          // Current operand1 (bits 2 to 5)
+    alt_u8 operand2;          // Current operand2 (bits 6 to 9)
+ alt_u16 result;           // Current result of the arithmetic operation
+ 
+    // Variables to store the previous state
+    alt_u8 prev_operation = 0xFF; // Initialize to a value outside the valid range (0-3)
+    alt_u8 prev_operand1 = 0xFF;  // Initialize to an invalid 4-bit value
+    alt_u8 prev_operand2 = 0xFF;  // Initialize to an invalid 4-bit value
+    alt_u16 prev_result = 0xFFFF; // Initialize to an invalid 16-bit value
+ while (1) {
+        // Step 1: Read all switch values
+        switches = IORD(sw, 0);
+ 
+        // Step 2: Extract operation and operands from switch values
+        operation = switches & 0x03;          // Extract bits 0-1 for the operation
+        operand1 = (switches >> 2) & 0x0F;    // Extract bits 2-5 for operand1
+        operand2 = (switches >> 6) & 0x0F;    // Extract bits 6-9 for operand2 
+}
+// Step 3: Perform the arithmetic operation
+        switch (operation) {
+            case 0x00: // Addition
+                result = operand1 + operand2;
+                break;
+            case 0x01: // Subtraction
+                result = operand1 - operand2;
+                break;
+            case 0x02: // Multiplication
+                result = operand1 * operand2;
+                break;
+            case 0x03: // Division
+                if (operand2 != 0)
+                    result = operand1 / operand2;
+else
+                    result = 0; // Handle divide-by-zero
+                break;
+            default:
+                result = 0; // Default case
+                break;
+        }
+  // Step 4: Compare with the previous state
+        if (operation != prev_operation || operand1 != prev_operand1 || operand2 != prev_operand2 || result != prev_result) {
+            // Print operation details to the console if there is a change
+            switch (operation) {
+                case 0x00:
+                    printf("Operation: Addition (%d + %d)\n", operand1, operand2);
+                    break;
+                case 0x01:
+                    printf("Operation: Subtraction (%d - %d)\n", operand1, operand2);
+                    break;
+ case 0x02:
+                    printf("Operation: Multiplication (%d * %d)\n", operand1, operand2);
+                    break;
+                case 0x03:
+                    if (operand2 != 0)
+                        printf("Operation: Division (%d / %d)\n", operand1, operand2);
+                    else
+                        printf("Operation: Division by Zero (%d / %d). Result set to 0.\n", operand1, operand2);
+                    break;
+                default:
+                    printf("Invalid Operation. Result set to 0.\n");
+                    break;
+}
+            printf("Operand 1: %d, Operand 2: %d, Result: %d\n\n", operand1, operand2, result);
+ 
+            // Update the previous state
+            prev_operation = operation;
+            prev_operand1 = operand1;
+            prev_operand2 = operand2;
+            prev_result = result;
