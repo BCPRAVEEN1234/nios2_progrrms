@@ -1,0 +1,75 @@
+//Implementing On-Chip Memory Read/Write Operations Using Nios II Processor
+#include <stdio.h>
+#include <system.h>
+#include <alt_types.h>
+#include <io.h>
+ 
+#define SWITCH_BASE 0x00021010         // Switch PIO base
+#define LED_BASE 0x00021000          // LED PIO base
+#define RAM_BASE 0x00010000 // On-chip RAM base
+#define MEM_SIZE 256                // Memory size (max 256 values)
+// Function prototypes
+void write_to_memory(alt_u8 data, alt_u16 address);
+alt_u8 read_from_memory(alt_u16 address);
+void debounce();
+int main() {
+    alt_u16 switches;    // Switch input
+    alt_u8 control_switch; // Single control switch
+    alt_u8 prev_control_switch = 0; // Previous switch state
+    alt_u8 data;         // 8-bit data input
+    alt_u8 read_data;    // 8-bit read data
+    alt_u16 address = 0; // Memory address counter
+    alt_u8 data_written = 0; // Flag to track if data was written to current address
+    alt_u8 data_read = 0;    // Flag to track if data was read in current read mode
+printf("Nios II On-Chip Memory Read/Write Test\n");
+    printf("Switch 9 = 1: Write Mode\n");
+    printf("Switch 9 = 0: Read Mode\n");
+ 
+    while (1) {
+        // Read switch states
+        switches = IORD(SWITCH_BASE, 0) & 0x3FF;  // Mask lower 10 bits
+        control_switch = (switches >> 9) & 0x01;   // SW[9] for control
+        data = switches & 0xFF;                    // SW[7:0] for data input
+// Write Mode (control_switch = 1)
+        if (control_switch) {
+            data_read = 0;  // Reset read flag when entering write mode
+            if (!data_written && address < MEM_SIZE) {
+                write_to_memory(data, address);
+                printf("\nWrote 0x%02X at Address: %d\n", data, address);
+                data_written = 1;  // Set flag to prevent continuous writing
+                address++;        // Move to next address for future write
+            }
+        }
+        // Read Mode (control_switch = 0)
+else {
+            if (address > 0 && !data_read) {  // Only read if there's data stored and not yet read
+                printf("\nStored Data:\n");
+                for (alt_u16 i = 0; i < address; i++) {
+                    read_data = read_from_memory(i);
+                    printf("Address %d: 0x%02X\n", i, read_data);
+                    IOWR(LED_BASE, 0, read_data); // Show data on LEDs
+                    debounce();
+                }
+                data_read = 1;  // Set flag to prevent continuous reading
+            }
+            data_written = 0;  // Reset flag when in read mode
+        }
+prev_control_switch = control_switch;
+        debounce();
+    }
+    return 0;
+}
+ 
+// Function to write data to on-chip RAM
+void write_to_memory(alt_u8 data, alt_u16 address) {
+    IOWR_8DIRECT(RAM_BASE, address, data);
+}
+// Function to read data from on-chip RAM
+alt_u8 read_from_memory(alt_u16 address) {
+    return IORD_8DIRECT(RAM_BASE, address);
+}
+ 
+// Debounce function (Simple delay)
+void debounce() {
+for (volatile int i = 0; i < 200000; i++); // Delay loop
+}
