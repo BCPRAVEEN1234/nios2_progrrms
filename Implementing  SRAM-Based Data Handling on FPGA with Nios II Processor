@@ -1,0 +1,64 @@
+#include <stdio.h>
+#include <system.h> // Contains system definitions including SRAM_CONTROLLER_0_BASE
+#include <alt_types.h> // Definitions for alt_u8, alt_u16, etc.
+#include <io.h> // IOWR and IORD macros 
+// Base addresses for the peripherals (adjust these as needed)
+#define SWITCH_BASE 0x00421010 // Switch PIO base address
+#define LED_BASE 0x00421000 // LED PIO base address
+#define SRAM_BASE 0x00200000 // SRAM controller base address (from system.h)
+ // Define the size (number of 8-bit locations) you plan to use in the SRAM
+#define MEM_SIZE 256 
+// Function prototypes
+void write_to_sram(alt_u8 data, alt_u16 address);
+alt_u8 read_from_sram(alt_u16 address);
+void debounce(void);
+int main(void) {
+    alt_u16 switches; // 9-bit switch input value
+    alt_u8 control_switch; // Read/Write control switch (SW[8])
+    alt_u8 data; // 8-bit data from switches (SW[7:0])
+    alt_u8 read_data; // Data read from SRAM
+    alt_u16 address = 0; // Memory address counter
+    alt_u8 data_written = 0; // Flag to track if data was written at the current address
+    alt_u8 data_read = 0; // Flag to track if data has been read in current read mode
+    printf("Nios II SRAM Read/Write Test\n");
+    printf("SW[8] = 1: Write Mode\n");
+    printf("SW[8] = 0: Read Mode\n");
+while (1) {
+        // Read the 9-bit value from the switches:
+        // bits [7:0] contain the data
+        // bit 8 (MSB) is the control: 1 = Write, 0 = Read
+        switches = IORD(SWITCH_BASE, 0) & 0x1FF; // Mask lower 9 bits
+        control_switch = (switches >> 8) & 0x01; // Extract SW[8]
+        data = switches & 0xFF; // Extract SW[7:0] for data
+
+        // Write Mode (SW[8] == 1)
+        if (control_switch) {
+            data_read = 0; // Reset read flag when switching to write mode
+            if (!data_written && address < MEM_SIZE) {
+                write_to_sram(data, address);
+                printf("Wrote 0x%02X at Address %d\n", data, address);
+                data_written = 1; // Prevent continuous writes at the same address
+                address++; // Advance to the next address for future writes
+            }
+        }
+// Read Mode (SW[8] == 0)
+        else {
+            if (address > 0 && !data_read) { // Only read if there is stored data and we haven't already read it
+                printf("\nStored SRAM Data:\n");
+                for (alt_u16 i = 0; i < address; i++) {
+                    read_data = read_from_sram(i);
+                    printf("Address %d: 0x%02X\n", i, read_data);
+                    // Optionally display the data on the LEDs
+                    IOWR(LED_BASE, 0, read_data);
+                    debounce();
+                }
+                data_read = 1; // Prevent continuous reading in read mode
+            }
+            data_written = 0; // Reset the write flag when in read mode
+        }
+
+        debounce();
+    }
+
+    return 0;
+}
