@@ -1,0 +1,154 @@
+//This C code is designed for a Nios II processor on an FPGA, where it performs the following key operations:
+//objectives for this program:
+//1.Generate two random matrices (matrix1 and matrix2) of size 5x5.
+//2.Add the matrices element-wise to create a resultMatrix.
+//3.Write the result to on-chip RAM.
+//4.Read the data back from the RAM and display it on the LEDs and in the console.
+#include <stdio.h>
+#include <system.h>
+#include <alt_types.h>
+#include <io.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define SWITCH_BASE 0x00101010        // Switch PIO base
+#define LED_BASE 0x00101000           // LED PIO base
+#define RAM_BASE 0x00080000           // On-chip RAM base
+#define MEM_SIZE 256                  // Memory size (max 256 values)
+#define MATRIX_SIZE 5
+
+// Function Prototypes
+void write_to_memory(alt_u8 data, alt_u16 address);
+alt_u8 read_from_memory(alt_u16 address);
+void debounce();
+void generateRandomMatrix(double matrix[MATRIX_SIZE][MATRIX_SIZE]);
+void addMatrices(double matrix1[MATRIX_SIZE][MATRIX_SIZE], double matrix2[MATRIX_SIZE][MATRIX_SIZE], double result[MATRIX_SIZE][MATRIX_SIZE]);
+void printMatrix(double matrix[MATRIX_SIZE][MATRIX_SIZE]);
+
+int main() {
+    alt_u16 switches;    // Switch input
+    alt_u8 control_switch; // Single control switch
+    alt_u8 prev_control_switch = 0; // Previous switch state
+    alt_u8 data;         // 8-bit data input
+    alt_u8 read_data;    // 8-bit read data
+    alt_u16 address = 0; // Memory address counter
+    alt_u8 data_written = 0; // Flag to track if data was written to current address
+    alt_u8 data_read = 0;    // Flag to track if data was read in current read mode
+    double matrix1[MATRIX_SIZE][MATRIX_SIZE];
+    double matrix2[MATRIX_SIZE][MATRIX_SIZE];
+    double resultMatrix[MATRIX_SIZE][MATRIX_SIZE];
+
+    printf("Nios II On-Chip Memory Read/Write Test\n");
+    printf("Switch 9 = 1: Write Mode\n");
+    printf("Switch 9 = 0: Read Mode\n");
+
+    srand(time(NULL)); // Initialize random number generator
+
+    while (1) {
+        // Read switch states
+        switches = IORD(SWITCH_BASE, 0) & 0x3FF;  // Mask lower 10 bits
+        control_switch = (switches >> 9) & 0x01;   // SW[9] for control
+        data = switches & 0xFF;                    // SW[7:0] for data input
+
+        // Debugging print: show switch states
+        printf("Switches: 0x%03X, Control Switch: %d\n", switches, control_switch);
+
+        // Write Mode (control_switch = 1)
+        if (control_switch) {
+            data_read = 0;  // Reset read flag when entering write mode
+            if (!data_written && address < MEM_SIZE) {
+                // Generate two random matrices and write them to memory
+                generateRandomMatrix(matrix1);
+                generateRandomMatrix(matrix2);
+
+                printf("\nOriginal Matrix 1 Generated:\n");
+                printMatrix(matrix1);
+
+                printf("\nOriginal Matrix 2 Generated:\n");
+                printMatrix(matrix2);
+
+                // Add the two matrices
+                addMatrices(matrix1, matrix2, resultMatrix);
+
+                printf("\nResult Matrix after Addition:\n");
+                printMatrix(resultMatrix);
+
+                // Write result of matrix addition to memory
+                for (int i = 0; i < MATRIX_SIZE; i++) {
+                    for (int j = 0; j < MATRIX_SIZE; j++) {
+                        write_to_memory((alt_u8)(resultMatrix[i][j]), address); // Store as 8-bit data
+                        printf("\nWrote 0x%02X at Address: %d\n", (alt_u8)(resultMatrix[i][j]), address);
+                        address++;
+                    }
+                }
+
+                data_written = 1;  // Set flag to prevent continuous writing
+            }
+        }
+        // Read Mode (control_switch = 0)
+        else {
+            if (address > 0 && !data_read) {  // Only read if there's data stored and not yet read
+                printf("\nStored Data (Read Mode):\n");
+                for (alt_u16 i = 0; i < address; i++) {
+                    read_data = read_from_memory(i);
+                    printf("Address %d: 0x%02X\n", i, read_data);
+                    IOWR(LED_BASE, 0, read_data); // Show data on LEDs
+                    debounce();
+                }
+                data_read = 1;  // Set flag to prevent continuous reading
+            }
+            data_written = 0;  // Reset flag when in read mode
+        }
+
+        prev_control_switch = control_switch;
+        debounce();
+    }
+
+    return 0;
+}
+
+// Function to write data to on-chip RAM
+void write_to_memory(alt_u8 data, alt_u16 address) {
+    IOWR_8DIRECT(RAM_BASE, address, data);
+}
+
+// Function to read data from on-chip RAM
+alt_u8 read_from_memory(alt_u16 address) {
+    return IORD_8DIRECT(RAM_BASE, address);
+}
+
+// Debounce function (Simple delay)
+void debounce() {
+    for (volatile int i = 0; i < 200000; i++); // Delay loop
+}
+
+// Function to generate a random matrix (size: 5x5)
+void generateRandomMatrix(double matrix[MATRIX_SIZE][MATRIX_SIZE]) {
+    int i, j;
+    for (i = 0; i < MATRIX_SIZE; i++) {
+        for (j = 0; j < MATRIX_SIZE; j++) {
+            matrix[i][j] = rand() % 11; // Generates random numbers between 0 and 10
+        }
+    }
+}
+
+// Function to add two matrices
+void addMatrices(double matrix1[MATRIX_SIZE][MATRIX_SIZE], double matrix2[MATRIX_SIZE][MATRIX_SIZE], double result[MATRIX_SIZE][MATRIX_SIZE]) {
+    int i, j;
+    for (i = 0; i < MATRIX_SIZE; i++) {
+        for (j = 0; j < MATRIX_SIZE; j++) {
+            result[i][j] = matrix1[i][j] + matrix2[i][j]; // Add corresponding elements
+        }
+    }
+}
+
+// Function to print the matrix
+void printMatrix(double matrix[MATRIX_SIZE][MATRIX_SIZE]) {
+    int i, j;
+    for (i = 0; i < MATRIX_SIZE; i++) {
+        for (j = 0; j < MATRIX_SIZE; j++) {
+            printf("%10.2f ", matrix[i][j]); // Print with two decimal points for better readability
+        }
+        printf("\n");
+    }
+}
