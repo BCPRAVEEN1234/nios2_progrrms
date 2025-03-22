@@ -1,0 +1,77 @@
+#include <stdio.h>
+#include <system.h>
+#include <alt_types.h>
+#include <io.h>
+#include <unistd.h> // For usleep function
+
+#define SWITCH_BASE 0x00021010       // Replace with actual base address of switches
+#define SEVEN_SEG_BASE 0x00021000    // Replace with actual base address of seven-segment display
+
+// Common Anode Encoding for 7-Segment Display
+const alt_u8 seven_seg_encoding[] = {
+    0xC0, // 0
+    0xF9, // 1
+    0xA4, // 2
+    0xB0, // 3
+    0x99, // 4
+    0x92, // 5
+    0x82, // 6
+    0xF8, // 7
+    0x80, // 8
+    0x90, // 9
+    0x88, // A
+    0x83, // B
+    0xC6, // C
+    0xA1, // D
+    0x86, // E
+    0x8E  // F
+};
+
+int main() {
+    alt_u8 counter = 0x0;  // Initialize the counter to 0
+    alt_u32 switches;      // Variable to read the state of switches
+    alt_u8 prev_direction = 0;  // Track the previous direction (0: up, 1: down)
+    alt_u8 direction = 0;       // Current direction (0: up, 1: down)
+
+    while (1) {
+        switches = IORD(SWITCH_BASE, 0); // Read the state of all switches
+
+        // Check if Reset switch (SW[0]) is ON
+        if (switches & 0x01) {
+            counter = 0x0; // Reset the counter to 0
+        } else {
+            // Check the Direction switch (SW[1])
+            direction = (switches >> 1) & 0x01;
+
+            if (direction != prev_direction) {
+                prev_direction = direction; // Update the previous direction
+            }
+
+            if (direction == 0) {
+                // Counting up
+                counter++;
+                if (counter > 0xF) {
+                    counter = 0x0; // Wrap around to 0
+                }
+            } else {
+                // Counting down
+                if (counter == 0x0) {
+                    counter = 0xF; // Wrap around to F
+                } else {
+                    counter--;
+                }
+            }
+        }
+
+        // Display the counter on the 7-segment display
+        IOWR(SEVEN_SEG_BASE, 0, seven_seg_encoding[counter]);
+
+        // Print the counter value and direction to the Nios II terminal
+        printf("Counter: 0x%X, Direction: %s\n", counter, (direction == 0) ? "Up" : "Down");
+
+        // Delay to control the counter speed
+        usleep(500000); // 500ms delay
+    }
+
+    return 0;
+}
