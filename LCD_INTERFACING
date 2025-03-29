@@ -1,0 +1,73 @@
+#include "system.h" // System definitions (includes base addresses)
+#include "io.h" // I/O access macros
+#include <stdio.h> // For console printing (printf)
+#include <unistd.h> // For usleep() delays
+
+// Base address for the character LCD IP (as defined in your Qsys system)
+#define LCD_BASE 0x00021008
+
+
+// Register Offsets for the LCD IP
+#define LCD_CMD 0 // Instruction (command) register offset
+#define LCD_DATA 1 // Data register offset
+
+// Function to write a command to the LCD
+void lcd_send_command(unsigned char cmd)
+{
+    IOWR_8DIRECT(LCD_BASE, LCD_CMD, cmd);
+    usleep(40); // Delay to allow command processing
+    printf("[DEBUG] Command 0x%X sent\n", cmd);
+}
+
+// Function to write data (a character) to the LCD
+void lcd_send_data(unsigned char data)
+{
+    IOWR_8DIRECT(LCD_BASE, LCD_DATA, data);
+    usleep(40); // Delay for data processing
+    printf("[DEBUG] Data '%c' (0x%X) sent\n", data, data);
+}// Function to initialize the LCD (following an HD44780 initialization sequence)
+void lcd_init(void)
+{
+    usleep(40000); // Wait at least 40ms after power-on
+    printf("[INFO] Initializing LCD...\n");
+
+    // Function set: 8-bit interface, 2-line display, 5x7 font
+    lcd_send_command(0x38);
+
+    // Display control: display on, cursor off, blink off
+    lcd_send_command(0x0C);
+
+    // Clear display
+    lcd_send_command(0x01);
+    usleep(1640); // Delay after clearing display
+
+    // Entry mode set: increment cursor, no display shift
+    lcd_send_command(0x06);
+
+    printf("[INFO] LCD Initialized!\n");
+}
+
+// Function to display a null-terminated string on the LCD
+void lcd_display_string(const char *str)
+{
+    while (*str)
+    {
+        lcd_send_data(*str++);
+    }
+}int main(void)
+{
+    printf("[INFO] Starting LCD Application...\n");
+
+    // Initialize the LCD
+    lcd_init();
+
+    // Display a test message on the LCD
+    printf("[INFO] Displaying message on LCD...\n");
+    lcd_display_string("welcome to FPGA");
+    printf("[SUCCESS] Message sent to LCD.\n");
+
+    // Stay in an infinite loop so the program does not exit
+    while (1);
+
+    return 0;
+} what is objective of this code
