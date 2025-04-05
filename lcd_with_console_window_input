@@ -1,0 +1,88 @@
+//lcd with input with  nios 2 console window
+#include "system.h"
+#include "io.h"
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+
+#define LCD_BASE 0x00101008   // Replace with your actual LCD base
+#define LCD_CMD  0
+#define LCD_DATA 1
+#define LCD_WIDTH 16
+
+// Send command to LCD
+void lcd_send_command(unsigned char cmd) {
+    IOWR_8DIRECT(LCD_BASE, LCD_CMD, cmd);
+    usleep(40);
+}
+
+// Send data (character) to LCD
+void lcd_send_data(unsigned char data) {
+    IOWR_8DIRECT(LCD_BASE, LCD_DATA, data);
+    usleep(40);
+}
+
+// Initialize LCD
+void lcd_init(void) {
+    usleep(40000);
+    lcd_send_command(0x38); // Function set
+    lcd_send_command(0x0C); // Display ON
+    lcd_send_command(0x01); // Clear
+    usleep(1640);
+    lcd_send_command(0x06); // Entry mode
+}
+
+// Clear LCD and set to line 1
+void lcd_clear() {
+    lcd_send_command(0x01);
+    usleep(1640);
+    lcd_send_command(0x80);
+}
+
+// Display string with optional scrolling
+void lcd_display_string(const char* str) {
+    lcd_clear();
+    int len = strlen(str);
+
+    if (len <= 32) {
+        // Display normally on 2 lines
+        for (int i = 0; i < len; i++) {
+            if (i == LCD_WIDTH) lcd_send_command(0xC0); // Line 2
+            lcd_send_data(str[i]);
+        }
+    } else {
+        // Scroll long text
+        for (int offset = 0; offset <= len - 32; offset++) {
+            lcd_clear();
+            for (int i = 0; i < 32; i++) {
+                if (i == LCD_WIDTH) lcd_send_command(0xC0); // Line 2
+                lcd_send_data(str[offset + i]);
+            }
+            usleep(500000); // Scroll delay (0.5s)
+        }
+    }
+}
+
+int main(void) {
+    char user_input[100];
+
+    printf("[INFO] LCD Console Echo Program Started\n");
+    lcd_init();
+
+    while (1) {
+        printf("Enter text to display on LCD: ");
+        fgets(user_input, sizeof(user_input), stdin);
+
+        // Remove newline if exists
+        size_t len = strlen(user_input);
+        if (len > 0 && user_input[len - 1] == '\n') {
+            user_input[len - 1] = '\0';
+        }
+
+        lcd_display_string(user_input);
+        printf("[LCD] \"%s\" displayed\n", user_input);
+    }
+
+    return 0;
+}
+
