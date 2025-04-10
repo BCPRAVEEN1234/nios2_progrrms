@@ -1,0 +1,147 @@
+#include <stdio.h>
+#include <alt_types.h>
+#include <io.h>
+#include <unistd.h>  // For usleep()
+
+// ---- Base Addresses (Update according to your Platform Designer) ----
+#define LCD_BASE     0x00501058
+#define SRAM_BASE    0x00200000
+
+// Individual HEX Display Base Addresses
+#define HEX4_BASE    0x00501000
+#define HEX3_BASE    0x00501010
+#define HEX2_BASE    0x00501020
+#define HEX1_BASE    0x00501030
+#define HEX0_BASE    0x00501040
+
+#define MEM_SIZE     256  // Number of bytes to test
+
+// ---- LCD Macros ----
+#define LCD_CMD_REG    (*(volatile unsigned char*)(LCD_BASE))
+#define LCD_DATA_REG   (*(volatile unsigned char*)(LCD_BASE + 1))
+
+// ---- Seven-Segment HEX Lookup Table (Active-High)
+const alt_u8 hex_lut[16] = {
+    0x3F, // 0
+    0x06, // 1
+    0x5B, // 2
+    0x4F, // 3
+    0x66, // 4
+    0x6D, // 5
+    0x7D, // 6
+    0x07, // 7
+    0x7F, // 8
+    0x6F, // 9
+    0x77, // A
+    0x7C, // B
+    0x39, // C
+    0x5E, // D
+    0x79, // E
+    0x71  // F
+};
+
+// ---- LCD Functions ----
+void lcd_send_cmd(unsigned char cmd) {
+    LCD_CMD_REG = cmd;
+    usleep(2000);
+}
+
+void lcd_send_data(unsigned char data) {
+    LCD_DATA_REG = data;
+    usleep(2000);
+}
+
+void lcd_init() {
+    usleep(15000);          // Wait for power-up
+    lcd_send_cmd(0x38);     // 8-bit, 2-line, 5x7 font
+    lcd_send_cmd(0x0C);     // Display ON, Cursor OFF
+    lcd_send_cmd(0x01);     // Clear display
+    usleep(2000);
+}
+
+void lcd_set_cursor(int row, int col) {
+    unsigned char pos = (row == 0) ? (0x80 + col) : (0xC0 + col);
+    lcd_send_cmd(pos);
+}
+
+void lcd_write_string(const char* str) {
+    while (*str) {
+        lcd_send_data(*str++);
+    }
+}
+
+void lcd_clear() {
+    lcd_send_cmd(0x01);
+    usleep(2000);
+}
+
+// ---- SRAM Access ----
+void write_to_sram(alt_u8 data, alt_u16 address) {
+    IOWR_8DIRECT(SRAM_BASE, address, data);
+}
+
+alt_u8 read_from_sram(alt_u16 address) {
+    return IORD_8DIRECT(SRAM_BASE, address);
+}
+
+// ---- HEX Display Function for Individual PIOs (HEX4 to HEX0) ----
+void display_on_hex(alt_u16 address, alt_u8 data) {
+    // Extract address and data nibbles
+    alt_u8 addr_high = (address >> 8) & 0x0F;
+    alt_u8 addr_mid  = (address >> 4) & 0x0F;
+    alt_u8 addr_low  = (address >> 0) & 0x0F;
+
+    alt_u8 data_high = (data >> 4) & 0x0F;
+    alt_u8 data_low  = (data >> 0) & 0x0F;
+
+    // Write to each HEX PIO separately (invert bits for active-low)
+    IOWR_8DIRECT(HEX4_BASE, 0, ~hex_lut[addr_high]); // HEX4
+    IOWR_8DIRECT(HEX3_BASE, 0, ~hex_lut[addr_mid]);  // HEX3
+    IOWR_8DIRECT(HEX2_BASE, 0, ~hex_lut[addr_low]);  // HEX2
+    IOWR_8DIRECT(HEX1_BASE, 0, ~hex_lut[data_high]); // HEX1
+    IOWR_8DIRECT(HEX0_BASE, 0, ~hex_lut[data_low]);  // HEX0
+}
+
+// ---- Main ----
+int main(void) {
+    alt_u16 address = 0;
+    alt_u8 data = 0xAA;
+    alt_u8 read_data;
+    char lcd_line[17];  // For LCD (16 chars max)
+
+    printf("Nios II SRAM Write + Read + LCD + HEX Display\n");
+
+    // Initialize LCD
+    lcd_init();
+
+    // Write to SRAM
+    for (address = 0; address < MEM_SIZE; address++) {
+        write_to_sram(data, address);
+        printf("Wrote 0x%02X to address %d\n", data, address);
+        data++;
+    }
+
+    // Read & Display
+    data = 0xAA; // Reset pattern
+    for (address = 0; address < MEM_SIZE; address++) {
+        read_data = read_from_sram(address);
+
+        // Show both LCD and HEX output
+        lcd_clear();
+
+        snprintf(lcd_line, 17, "Addr: %03d", address);
+        lcd_set_cursor(0, 0);
+        lcd_write_string(lcd_line);
+
+        snprintf(lcd_line, 17, "Data: 0x%02X", read_data);
+        lcd_set_cursor(1, 0);
+        lcd_write_string(lcd_line);
+
+        display_on_hex(address, read_data);  // HEX output
+
+        usleep(500000); // 0.5 second delay
+        data++;
+    }
+
+    return 0;
+}
