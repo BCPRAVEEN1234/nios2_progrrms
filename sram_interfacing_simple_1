@@ -1,0 +1,49 @@
+#include <stdio.h>
+#include <system.h>       // Contains system definitions
+#include <alt_types.h>    // Definitions for alt_u8, alt_u16, etc.
+#include <io.h>           // IORD and IOWR macros
+
+// Define base address of external SRAM manually
+#define SRAM_BASE 0x00200000
+
+// Define the size of SRAM test region (in bytes)
+#define MEM_SIZE 256
+
+// Function prototypes
+void write_to_sram(alt_u8 data, alt_u16 address);
+alt_u8 read_from_sram(alt_u16 address);
+
+int main(void) {
+    alt_u16 address = 0;
+    alt_u8 data = 0xAA; // Starting data pattern
+    alt_u8 read_data;
+
+    printf("Nios II SRAM Write & Read Test (No I/O Devices)\n");
+
+    // Write data to SRAM
+    for (address = 0; address < MEM_SIZE; address++) {
+        write_to_sram(data, address);
+        printf("Wrote 0x%02X to address %d\n", data, address);
+        data++; // Increment data value for testing
+    }
+
+    printf("\nReading back data from SRAM:\n");
+
+    // Read data back from SRAM and print
+    for (address = 0; address < MEM_SIZE; address++) {
+        read_data = read_from_sram(address);
+        printf("Address %d: 0x%02X\n", address, read_data);
+    }
+
+    return 0;
+}
+
+// Function to write 1 byte to SRAM
+void write_to_sram(alt_u8 data, alt_u16 address) {
+    IOWR_8DIRECT(SRAM_BASE, address, data);
+}
+
+// Function to read 1 byte from SRAM
+alt_u8 read_from_sram(alt_u16 address) {
+    return IORD_8DIRECT(SRAM_BASE, address);
+}
