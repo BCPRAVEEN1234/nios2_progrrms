@@ -1,0 +1,116 @@
+#include <stdio.h>
+#include <alt_types.h>
+#include <io.h>
+#include <unistd.h>  // For usleep()
+
+// ---- Base Addresses (Update as per your system) ----
+#define LCD_BASE       0x00501008
+#define SRAM_BASE      0x00200000
+#define MEM_SIZE       256  // You can change this as needed
+
+// ---- LCD Macros ----
+#define LCD_CMD_REG    (*(volatile unsigned char*)(LCD_BASE))
+#define LCD_DATA_REG   (*(volatile unsigned char*)(LCD_BASE + 1))
+
+// ---- LCD Functions ----
+void lcd_send_cmd(unsigned char cmd) {
+    LCD_CMD_REG = cmd;
+    usleep(2000);
+}
+
+void lcd_send_data(unsigned char data) {
+    LCD_DATA_REG = data;
+    usleep(2000);
+}
+
+void lcd_init() {
+    usleep(15000);          // Wait for power-up
+    lcd_send_cmd(0x38);     // 8-bit, 2-line, 5x7 font
+    lcd_send_cmd(0x0C);     // Display ON, Cursor OFF
+    lcd_send_cmd(0x01);     // Clear display
+    usleep(2000);
+}
+
+void lcd_set_cursor(int row, int col) {
+    unsigned char pos = (row == 0) ? (0x80 + col) : (0xC0 + col);
+    lcd_send_cmd(pos);
+}
+
+void lcd_write_string(const char* str) {
+    while (*str) {
+        lcd_send_data(*str++);
+    }
+}
+
+void lcd_clear() {
+    lcd_send_cmd(0x01);
+    usleep(2000);
+}
+
+// ---- SRAM Functions ----
+void write_to_sram(alt_u8 data, alt_u16 address) {
+    IOWR_8DIRECT(SRAM_BASE, address, data);
+}
+
+alt_u8 read_from_sram(alt_u16 address) {
+    return IORD_8DIRECT(SRAM_BASE, address);
+}
+
+// ---- Main ----
+int main(void) {
+    alt_u16 address = 0;
+    alt_u8 data = 0xAA;
+    alt_u8 read_data;
+    char lcd_line[17];  // 16 characters + null terminator
+
+    printf("Nios II SRAM Write + Read + LCD Display\n");
+
+    // Initialize LCD
+    lcd_init();
+
+    // Write to SRAM
+    for (address = 0; address < MEM_SIZE; address++) {
+        write_to_sram(data, address);
+        printf("Wrote 0x%02X to address %d\n", data, address);
+        data++;
+    }
+
+    // Read from SRAM & Verify
+    data = 0xAA; // Reset pattern
+    for (address = 0; address < MEM_SIZE; address++) {
+        read_data = read_from_sram(address);
+
+        if (read_data != data) {
+            printf("ERROR at address %d: Wrote 0x%02X, Read 0x%02X\n", address, data, read_data);
+
+            lcd_clear();
+            snprintf(lcd_line, 17, "Err Addr: %03d", address);
+            lcd_set_cursor(0, 0);
+            lcd_write_string(lcd_line);
+
+            snprintf(lcd_line, 17, "W:%02X R:%02X", data, read_data);
+            lcd_set_cursor(1, 0);
+            lcd_write_string(lcd_line);
+        } else {
+            printf("Verified address %d: 0x%02X\n", address, read_data);
+
+            lcd_clear();
+
+            // First line: Address
+            snprintf(lcd_line, 17, "Addr: %03d", address);
+            lcd_set_cursor(0, 0);
+            lcd_write_string(lcd_line);
+
+            // Second line: Data
+            snprintf(lcd_line, 17, "Data: 0x%02X", read_data);
+            lcd_set_cursor(1, 0);
+            lcd_write_string(lcd_line);
+        }
+
+        usleep(500000); // 0.5 second delay for LCD
+        data++;
+    }
+
+    return 0;
+}
+
